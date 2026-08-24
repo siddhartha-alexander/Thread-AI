@@ -9,3 +9,7 @@ __pycache__/
 .venv/
 node_modules/
 dist/
+.vercel/
+.npm-vercel-cache/
+
+.vercel
