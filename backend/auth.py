@@ -39,15 +39,23 @@ def google_authorization_url(settings: Settings, state: str) -> str:
     return f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
 
 
-def create_session_token(user_id: str, settings: Settings) -> str:
-    payload = {"sub": user_id, "iat": int(time.time())}
+def create_session_token(user: models.User, settings: Settings) -> str:
+    payload = {
+        "sub": user.id,
+        "email": user.email,
+        "name": user.name,
+        "avatar_url": user.avatar_url,
+        "provider": user.provider,
+        "provider_sub": user.provider_sub,
+        "iat": int(time.time()),
+    }
     encoded = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode().rstrip("=")
     signature = hmac.new(settings.auth_secret.encode(), encoded.encode(), hashlib.sha256).digest()
     signed = base64.urlsafe_b64encode(signature).decode().rstrip("=")
     return f"{encoded}.{signed}"
 
 
-def read_session_token(token: str, settings: Settings) -> str | None:
+def read_session_token(token: str, settings: Settings) -> dict | None:
     try:
         encoded, signed = token.split(".", 1)
         expected = hmac.new(settings.auth_secret.encode(), encoded.encode(), hashlib.sha256).digest()
@@ -57,7 +65,7 @@ def read_session_token(token: str, settings: Settings) -> str | None:
         payload = json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))
         if int(time.time()) - int(payload["iat"]) > settings.session_days * 24 * 60 * 60:
             return None
-        return str(payload["sub"])
+        return payload
     except (KeyError, TypeError, ValueError, json.JSONDecodeError):
         return None
 
@@ -114,6 +122,25 @@ def upsert_dev_user(db: Session) -> models.User:
     return user
 
 
+def restore_user_from_session(db: Session, payload: dict) -> models.User | None:
+    email = payload.get("email")
+    provider_sub = payload.get("provider_sub")
+    if not email or not provider_sub:
+        return None
+    user = models.User(
+        id=str(payload["sub"]),
+        email=str(email),
+        name=payload.get("name"),
+        avatar_url=payload.get("avatar_url"),
+        provider=str(payload.get("provider") or "session"),
+        provider_sub=str(provider_sub),
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 def get_current_user(
     request: Request,
     db: Session = Depends(get_db),
@@ -122,10 +149,12 @@ def get_current_user(
     token = request.cookies.get(SESSION_COOKIE)
     if not token:
         raise HTTPException(status_code=401, detail="Sign in required.")
-    user_id = read_session_token(token, settings)
-    if not user_id:
+    payload = read_session_token(token, settings)
+    if not payload:
         raise HTTPException(status_code=401, detail="Session expired. Please sign in again.")
-    user = db.query(models.User).filter(models.User.id == user_id).first()
+    user = db.query(models.User).filter(models.User.id == str(payload["sub"])).first()
+    if not user:
+        user = restore_user_from_session(db, payload)
     if not user:
         raise HTTPException(status_code=401, detail="Session user was not found.")
     return user

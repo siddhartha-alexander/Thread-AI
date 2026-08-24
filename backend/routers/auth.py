@@ -53,7 +53,7 @@ def dev_login(
     response = JSONResponse(AuthStatusResponse(authenticated=True, user=user_read(user)).model_dump(mode="json"))
     response.set_cookie(
         SESSION_COOKIE,
-        create_session_token(user.id, settings),
+        create_session_token(user, settings),
         httponly=True,
         secure=settings.cookie_secure,
         samesite=cookie_samesite(settings),
@@ -102,7 +102,7 @@ async def google_callback(
     response.delete_cookie(STATE_COOKIE)
     response.set_cookie(
         SESSION_COOKIE,
-        create_session_token(user.id, settings),
+        create_session_token(user, settings),
         httponly=True,
         secure=settings.cookie_secure,
         samesite=cookie_samesite(settings),

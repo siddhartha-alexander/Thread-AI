@@ -585,10 +585,22 @@ function ChatApp({ user, onLogout }) {
 function WelcomePage({ user, authError, googleConfigured, devAuthEnabled, onContinue, onDevLogin }) {
   const [emailOpen, setEmailOpen] = useState(false);
   const [email, setEmail] = useState("");
+  const [emailLoading, setEmailLoading] = useState(false);
 
   function startGoogle() {
     if (!googleConfigured) return;
     window.location.href = googleSignInUrl();
+  }
+
+  async function submitEmail(event) {
+    event.preventDefault();
+    setEmailLoading(true);
+    if (googleConfigured) {
+      startGoogle();
+      return;
+    }
+    await onDevLogin();
+    setEmailLoading(false);
   }
 
   return (
@@ -666,10 +678,13 @@ function WelcomePage({ user, authError, googleConfigured, devAuthEnabled, onCont
               Continue with email
             </button>
             {emailOpen && (
-              <form className="thread-auth-email" onSubmit={(event) => event.preventDefault()}>
+              <form className="thread-auth-email" onSubmit={submitEmail}>
                 <label htmlFor="thread-email">Email</label>
                 <input id="thread-email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" type="email" />
-                <p>Email sign-in needs an email provider before deployment. Google sign-in is the active secure method.</p>
+                <button className="thread-auth-secondary" type="submit" disabled={emailLoading || !email.trim()}>
+                  {emailLoading ? <Loader2 className="thread-spin" size={14} /> : <ArrowRight size={14} />} Continue
+                </button>
+                <p>Email sign-in will use Google verification until a dedicated email provider is connected.</p>
               </form>
             )}
           </>
