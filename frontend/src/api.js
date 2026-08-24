@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8020";
+const API_BASE = import.meta.env.VITE_API_BASE ?? (import.meta.env.PROD ? "" : "http://127.0.0.1:8020");
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
