@@ -12,6 +12,13 @@
       "entrypoint": "backend.main:app"
     }
   },
+  "redirects": [
+    {
+      "source": "/app",
+      "destination": "/",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/(.*)",
