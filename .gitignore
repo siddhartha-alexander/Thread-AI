@@ -1,0 +1,11 @@
+.env
+*.env.local
+frontend/.env
+frontend/.env.local
+thread_ai.db
+*.db
+__pycache__/
+.pytest_cache/
+.venv/
+node_modules/
+dist/
