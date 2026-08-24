@@ -117,6 +117,29 @@ class ThreadRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ResponseRead(BaseModel):
+    id: str
+    user_query: str
+    response_text: str
+    created_at: datetime
+    threads: list[ThreadRead] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ConversationSummary(BaseModel):
+    id: str
+    title: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ConversationRead(ConversationSummary):
+    responses: list[ResponseRead] = []
+
+
 class HealthResponse(BaseModel):
     status: str
     llm_configured: bool

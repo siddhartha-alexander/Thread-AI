@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Check, Loader2, LogOut, Menu, PanelLeftClose, Plus, Send, Sparkles, X } from "lucide-react";
-import { createChat, createThread, devLogin, enhancePrompt, getAuthConfig, getCurrentUser, getResponseThreads, getThread, googleSignInUrl, logout, sendThreadMessage } from "./api";
+import { createChat, createThread, devLogin, enhancePrompt, getAuthConfig, getConversation, getCurrentUser, getResponseThreads, getThread, googleSignInUrl, listConversations, logout, sendThreadMessage } from "./api";
 import threadLogo from "./assets/thread-ai-logo.png";
 
 const DEMO_QUESTION = "Explain how Convolutional Neural Networks work.";
@@ -103,6 +103,45 @@ function normalizeThread(raw) {
   };
 }
 
+function mapConversationSummary(raw) {
+  return {
+    id: raw.id,
+    title: raw.title,
+    messages: [],
+    loaded: false,
+    created_at: raw.created_at,
+    updated_at: raw.updated_at,
+  };
+}
+
+function mapStoredConversation(raw) {
+  const messages = [];
+  for (const response of raw.responses || []) {
+    messages.push({
+      id: `${response.id}-user`,
+      role: "user",
+      content: response.user_query,
+    });
+    messages.push({
+      id: response.id,
+      role: "assistant",
+      question: response.user_query,
+      response_id: response.id,
+      response_text: response.response_text,
+      paragraphs: paragraphize(response.response_text),
+      threads: (response.threads || []).map(normalizeThread),
+    });
+  }
+  return {
+    id: raw.id,
+    title: raw.title,
+    messages,
+    loaded: true,
+    created_at: raw.created_at,
+    updated_at: raw.updated_at,
+  };
+}
+
 function submittedInputValue(event, fallback) {
   return event.currentTarget.querySelector("input")?.value || fallback;
 }
@@ -131,9 +170,11 @@ function ChatApp({ user, onLogout }) {
   const [panelLoading, setPanelLoading] = useState(false);
   const [panelMinimized, setPanelMinimized] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const scrollRef = useRef(null);
   const markRefs = useRef({});
+  const historyLoadedRef = useRef(false);
 
   const activeConversation = conversations.find((conversation) => conversation.id === activeConversationId);
   const activeThreadMessage = useMemo(
@@ -163,6 +204,61 @@ function ChatApp({ user, onLogout }) {
     const rawThreads = await getResponseThreads(responseId);
     updateThreads(conversationId, responseId, () => rawThreads.map(normalizeThread));
   }
+
+  const loadConversation = useCallback(async (conversationId) => {
+    setHistoryLoading(true);
+    setErrorMsg(null);
+    try {
+      const raw = await getConversation(conversationId);
+      const mapped = mapStoredConversation(raw);
+      setConversations((prev) => {
+        const exists = prev.some((conversation) => conversation.id === conversationId);
+        if (exists) return prev.map((conversation) => (conversation.id === conversationId ? mapped : conversation));
+        return [mapped, ...prev];
+      });
+      setActiveConversationId(conversationId);
+      setPanel(null);
+      setPopover(null);
+    } catch (error) {
+      setErrorMsg(error.message || "THREAD AI could not load that conversation.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (historyLoadedRef.current) return undefined;
+    historyLoadedRef.current = true;
+    let cancelled = false;
+    async function loadHistory() {
+      setHistoryLoading(true);
+      try {
+        const raw = await listConversations();
+        if (cancelled) return;
+        const summaries = raw.map(mapConversationSummary);
+        setConversations((prev) => {
+          const byId = new Map(prev.map((conversation) => [conversation.id, conversation]));
+          const serverItems = summaries.map((summary) => {
+            const existing = byId.get(summary.id);
+            return existing?.loaded ? existing : { ...summary, messages: existing?.messages || [] };
+          });
+          const localItems = prev.filter((conversation) => conversation.id.startsWith("local-"));
+          return [...localItems, ...serverItems];
+        });
+        if (!activeConversationId && summaries.length > 0) {
+          await loadConversation(summaries[0].id);
+        }
+      } catch (error) {
+        if (!cancelled) setErrorMsg(error.message || "THREAD AI could not load your history.");
+      } finally {
+        if (!cancelled) setHistoryLoading(false);
+      }
+    }
+    loadHistory();
+    return () => {
+      cancelled = true;
+    };
+  }, [loadConversation]);
 
   useEffect(() => {
     function onMouseUp() {
@@ -287,7 +383,7 @@ function ChatApp({ user, onLogout }) {
         messages: [...conversation.messages, userMessage],
       }));
     } else {
-      setConversations((prev) => [{ id: localId, title: cleaned.slice(0, 80), messages: [userMessage] }, ...prev]);
+      setConversations((prev) => [{ id: localId, title: cleaned.slice(0, 80), messages: [userMessage], loaded: true }, ...prev]);
       setActiveConversationId(localId);
     }
     setInputValue("");
@@ -300,6 +396,7 @@ function ChatApp({ user, onLogout }) {
       updateConversation(localId, (conversation) => ({
         ...conversation,
         id: response.conversation_id,
+        loaded: true,
         title: conversation.title === "New chat" ? response.user_query.slice(0, 80) : conversation.title,
         messages: [
           ...conversation.messages,
@@ -389,7 +486,7 @@ function ChatApp({ user, onLogout }) {
 
   function newChat() {
     const id = `local-${Date.now()}`;
-    setConversations((prev) => [{ id, title: "New chat", messages: [] }, ...prev]);
+    setConversations((prev) => [{ id, title: "New chat", messages: [], loaded: true }, ...prev]);
     setActiveConversationId(id);
     setPanel(null);
     setPopover(null);
@@ -412,8 +509,21 @@ function ChatApp({ user, onLogout }) {
         <button className="thread-new-chat" onClick={newChat}><Plus size={15} /> New chat</button>
         <div className="thread-sidebar-label">Recent</div>
         <div className="thread-sidebar-list">
+          {historyLoading && conversations.length === 0 && <div className="thread-sidebar-empty">Loading history...</div>}
           {conversations.map((conversation) => (
-            <button key={conversation.id} className={`thread-sidebar-item ${conversation.id === activeConversationId ? "thread-sidebar-item-active" : ""}`} onClick={() => setActiveConversationId(conversation.id)}>
+            <button
+              key={conversation.id}
+              className={`thread-sidebar-item ${conversation.id === activeConversationId ? "thread-sidebar-item-active" : ""}`}
+              onClick={() => {
+                if (conversation.loaded || conversation.id.startsWith("local-")) {
+                  setActiveConversationId(conversation.id);
+                  setPanel(null);
+                  setPopover(null);
+                } else {
+                  loadConversation(conversation.id);
+                }
+              }}
+            >
               {conversation.title}
             </button>
           ))}

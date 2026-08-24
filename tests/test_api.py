@@ -96,6 +96,37 @@ def test_prompt_enhancement_endpoint():
     assert body["enhanced_prompt"].startswith("Please explain")
 
 
+def test_conversation_history_listing_and_detail():
+    with client() as test_client:
+        chat = create_response(test_client)
+        listing = test_client.get("/api/conversations")
+        detail = test_client.get(f"/api/conversations/{chat['conversation_id']}")
+    assert listing.status_code == 200
+    assert any(conversation["id"] == chat["conversation_id"] for conversation in listing.json())
+    assert detail.status_code == 200
+    body = detail.json()
+    assert body["id"] == chat["conversation_id"]
+    assert body["responses"][0]["id"] == chat["response_id"]
+    assert "spatially invariant features" in body["responses"][0]["response_text"]
+
+
+def test_conversation_history_includes_threads():
+    with client() as test_client:
+        chat = create_response(test_client)
+        created = test_client.post("/api/threads", json=anchor_payload(chat, "spatially invariant features"))
+        detail = test_client.get(f"/api/conversations/{chat['conversation_id']}")
+    assert created.status_code == 201
+    thread = detail.json()["responses"][0]["threads"][0]
+    assert thread["selected_text"] == "spatially invariant features"
+    assert [message["role"] for message in thread["messages"]] == ["user", "assistant"]
+
+
+def test_invalid_conversation_id():
+    with client() as test_client:
+        response = test_client.get("/api/conversations/not-a-conversation")
+    assert response.status_code == 404
+
+
 def test_thread_creation_and_retrieval():
     with client() as test_client:
         chat = create_response(test_client)

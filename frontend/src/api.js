@@ -40,6 +40,14 @@ export function createChat(message, conversationId) {
   });
 }
 
+export function listConversations() {
+  return request("/api/conversations");
+}
+
+export function getConversation(conversationId) {
+  return request(`/api/conversations/${conversationId}`);
+}
+
 export function enhancePrompt(prompt) {
   return request("/api/enhance-prompt", {
     method: "POST",

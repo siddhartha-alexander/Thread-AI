@@ -21,7 +21,11 @@ class Conversation(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     user: Mapped["User | None"] = relationship(back_populates="conversations")
-    responses: Mapped[list["AIResponse"]] = relationship(back_populates="conversation", cascade="all, delete-orphan")
+    responses: Mapped[list["AIResponse"]] = relationship(
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        order_by="AIResponse.created_at",
+    )
 
 
 class User(Base):
@@ -49,7 +53,11 @@ class AIResponse(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
 
     conversation: Mapped[Conversation] = relationship(back_populates="responses")
-    threads: Mapped[list["Thread"]] = relationship(back_populates="response", cascade="all, delete-orphan")
+    threads: Mapped[list["Thread"]] = relationship(
+        back_populates="response",
+        cascade="all, delete-orphan",
+        order_by="Thread.created_at",
+    )
 
 
 class Thread(Base):
