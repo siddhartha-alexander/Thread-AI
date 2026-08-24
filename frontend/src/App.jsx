@@ -751,7 +751,7 @@ export default function App() {
 
   useEffect(() => {
     if (authLoading) return;
-    if (path === "/app" && !user) {
+    if (path === "/app") {
       window.history.replaceState({}, "", "/");
       setPath("/");
     }
@@ -773,7 +773,7 @@ export default function App() {
     try {
       const result = await devLogin();
       setUser(result.user);
-      navigate("/app");
+      navigate("/");
     } catch (error) {
       setAuthError(error.message || "Local preview sign-in is not available.");
     }
@@ -785,14 +785,14 @@ export default function App() {
 
   if (path === "/privacy") return <LegalPage type="privacy" onBack={() => navigate("/")} />;
   if (path === "/terms") return <LegalPage type="terms" onBack={() => navigate("/")} />;
-  if (path === "/app" && user) return <ChatApp user={user} onLogout={handleLogout} />;
+  if (user) return <ChatApp user={user} onLogout={handleLogout} />;
   return (
     <WelcomePage
       user={user}
       authError={authError}
       googleConfigured={googleConfigured}
       devAuthEnabled={devAuthEnabled}
-      onContinue={() => navigate("/app")}
+      onContinue={() => navigate("/")}
       onDevLogin={handleDevLogin}
     />
   );

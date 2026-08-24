@@ -98,7 +98,7 @@ async def google_callback(
         user = upsert_google_user(db, profile)
     except (httpx.HTTPError, HTTPException):
         return RedirectResponse(f"{frontend_url}/?auth_error=google_failed", status_code=302)
-    response = RedirectResponse(f"{frontend_url}/app", status_code=302)
+    response = RedirectResponse(frontend_url, status_code=302)
     response.delete_cookie(STATE_COOKIE)
     response.set_cookie(
         SESSION_COOKIE,
