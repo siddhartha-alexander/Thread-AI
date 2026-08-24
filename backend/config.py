@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     google_client_secret: str | None = Field(default=None, alias="GOOGLE_CLIENT_SECRET")
     auth_secret: str = Field(default="change-this-before-deployment", alias="AUTH_SECRET")
     cookie_secure: bool = Field(default=False, alias="COOKIE_SECURE")
+    cookie_samesite: str = Field(default="lax", alias="COOKIE_SAMESITE")
     session_days: int = Field(default=14, alias="SESSION_DAYS")
     allow_dev_auth: bool = Field(default=False, alias="ALLOW_DEV_AUTH")
 

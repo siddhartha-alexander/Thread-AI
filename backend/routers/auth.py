@@ -27,6 +27,11 @@ def user_read(user: models.User) -> UserRead:
     return UserRead(id=user.id, email=user.email, name=user.name, avatar_url=user.avatar_url)
 
 
+def cookie_samesite(settings: Settings) -> str:
+    value = settings.cookie_samesite.lower()
+    return value if value in {"lax", "strict", "none"} else "lax"
+
+
 @router.get("/me", response_model=AuthStatusResponse)
 def me(user: models.User = Depends(get_current_user)) -> AuthStatusResponse:
     return AuthStatusResponse(authenticated=True, user=user_read(user))
@@ -51,7 +56,7 @@ def dev_login(
         create_session_token(user.id, settings),
         httponly=True,
         secure=settings.cookie_secure,
-        samesite="lax",
+        samesite=cookie_samesite(settings),
         max_age=settings.session_days * 24 * 60 * 60,
     )
     return response
@@ -68,7 +73,7 @@ def google_start(settings: Settings = Depends(get_settings)) -> RedirectResponse
         state,
         httponly=True,
         secure=settings.cookie_secure,
-        samesite="lax",
+        samesite=cookie_samesite(settings),
         max_age=10 * 60,
     )
     return response
@@ -100,7 +105,7 @@ async def google_callback(
         create_session_token(user.id, settings),
         httponly=True,
         secure=settings.cookie_secure,
-        samesite="lax",
+        samesite=cookie_samesite(settings),
         max_age=settings.session_days * 24 * 60 * 60,
     )
     return response
